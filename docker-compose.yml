@@ -1,0 +1,93 @@
+version: '3.4'
+
+networks:
+  private:
+    driver: bridge
+    name: priv-net
+  public:
+    driver: bridge
+    name: pub-net
+    external: true
+
+volumes:
+  cf_vol:
+    external: true
+
+services:
+  fe-web:
+    container_name: fe-web
+    build:
+      context: .
+      dockerfile: fe-web/Dockerfile
+    ports:
+      - 3001:3000
+    environment:
+      - CHOKIDAR_USEPOLLING=true
+    networks:
+      - public
+
+  leaderboard_db:
+    container_name: leaderboard_db
+    image: ravendb/ravendb
+    ports:
+      - 8012:8080
+      - 38888:38888
+    environment:
+      - RAVEN_Security_UnsecuredAccessAllowed=PrivateNetwork
+      - RAVEN_Setup_Mode=None
+      - RAVEN_License_Eula_Accepted=true
+    volumes:
+      - cf_vol:/opt/RavenDB/config
+      - cf_vol:/opt/RavenDB/Server/RavenData
+    networks:
+      - private
+
+  history_db:
+    container_name: history_db
+    image: mongo
+    ports:
+      - 27017:27017
+    volumes:
+      - cf_vol:/data/db
+
+  history:
+    container_name: history
+    image: history:latest
+    build:
+      context: .
+      dockerfile: history-service/Dockerfile
+    depends_on:
+      - history_db
+    ports:
+      - "8013:3000"
+    networks:
+      - private
+
+  leaderboard:
+    container_name: leaderboard
+    image: leaderboard:latest
+    build:
+      context: .
+      dockerfile: leaderboard-service/Dockerfile
+    depends_on:
+      - leaderboard_db
+    ports:
+      - "8011:8080"
+    networks:
+      - private
+
+  ocelotapigw:
+    container_name: ocelotapigw
+    image: ocelotapigw:latest
+    build:
+      context: .
+      dockerfile: gateway/Dockerfile
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+    depends_on:
+      - leaderboard
+      - history
+    ports:
+      - "8010:80"
+    networks:
+      - private
