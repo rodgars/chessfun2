@@ -14,6 +14,13 @@ volumes:
     external: true
 
 services:
+  redis:
+    container_name: redis
+    image: redis:5
+    networks:
+      - private
+    ports:
+      - 6379:6379
   fe-web:
     container_name: fe-web
     build:
@@ -49,6 +56,19 @@ services:
       - 27017:27017
     volumes:
       - cf_vol:/data/db
+
+  match:
+    container_name: match
+    image: match:latest
+    build:
+      context: .
+      dockerfile: matchservice/Dockerfile
+    ports:
+      - "8014:8000"
+    networks:
+      - private
+    depends_on:
+      - redis
 
   history:
     container_name: history
